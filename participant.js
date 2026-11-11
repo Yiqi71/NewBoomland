@@ -72,6 +72,26 @@ function participantActivityList(){
  const statusColor={'进行中':'green','报名中':'pink','结算中':'yellow'};
  return `<section class="panel participant-activities"><div class="panel-head"><div><h2>我的活动</h2><p>你报名的全部活动：进行中的继续推进，已定格与已结算的随时回看。</p></div>${badge(items.length+' 个活动','pink')}</div><ul class="participant-activity-list">${items.map(({code,record})=>{const current=code===state.season.code;const status=activityDisplayStatus(record);return `<li class="${current?'current':''}"><div class="participant-activity-main"><strong>${esc(record.season.name)}</strong><span class="small muted">${esc(record.season.organizer)} · ${esc(record.season.dates[2]||'待公布')} — ${esc(record.season.dates[6]||'待公布')}</span></div><div class="chips">${badge(status,statusColor[status]||'')}${badge(recordRewardLabel(record))}</div><div class="participant-activity-score"><b>${recordProjectScore(record)}</b><small>积分</small></div>${current?badge('当前查看','pink'):button('进入','switch-my-activity:'+code,'sm')}</li>`;}).join('')}</ul></section>`;
 }
+function participantJoinedActivities(){
+ const records=state.organizerSeasonRecords||{};
+ const joined=[{code:state.season.code,record:state,current:true}];
+ for(const [code,record] of Object.entries(records)){if(code===state.season.code||!record?.application)continue;joined.push({code,record,current:false});}
+ return joined;
+}
+function participantOpenActivities(joinedCodes){
+ const codes=[...new Set(['S01','S02','W01','H02','A01','P00',...Object.keys(state.organizerSeasonRecords||{})])];
+ return codes.filter(code=>!joinedCodes.has(code)).map(code=>({code,record:publicActivityRecord(code)})).filter(item=>item.record&&activityDisplayStatus(item.record)==='报名中');
+}
+function participantSeasonChips(){
+ const joined=participantJoinedActivities();
+ const open=participantOpenActivities(new Set(joined.map(item=>item.code)));
+ const name=record=>esc(record.season.name.replace(/^BoomLand\s*/,''));
+ const chips=[
+  ...open.map(({code,record})=>`<a class="season-chip open" href="#season?code=${esc(code)}">${badge('报名中','pink')}<strong>${name(record)}</strong><span class="season-chip-hint">去报名 →</span></a>`),
+  ...joined.map(({code,record,current})=>current?`<span class="season-chip current" aria-current="true">${badge(activityDisplayStatus(record),'pink')}<strong>${name(record)}</strong><span class="season-chip-hint">当前</span></span>`:`<button type="button" class="season-chip" data-action="switch-my-activity:${esc(code)}">${badge(activityDisplayStatus(record))}<strong>${name(record)}</strong></button>`)
+ ];
+ return `<div class="participant-season-chips" aria-label="可报名的活动与我参加过的赛季">${chips.join('')}</div>`;
+}
 function participantNext(){
  const p=state.ownProject,a=state.application,phase=state.phase;
  if(phase==='cancelled')return {title:'赛季已取消',text:'积分与作品保留为档案，本季不发放奖励。',label:'查看赛季记录',route:'rewards'};
@@ -93,9 +113,26 @@ function participantTasks(){const p=state.ownProject,works=state.works.filter(w=
 function participantDeadlines(){return panel('本季关键时间',state.participantDemo?'演示赛程 · 北京时间':'北京时间 · 以赛季公告为准',`<ul class="participant-deadlines">${[['开赛',2],['组队截止',3],['命题冻结',4],['作品截止',5],['评分截止',6]].map(([label,i])=>`<li class="${label==='作品截止'?'highlight':''}"><span>${label}</span><strong>${esc(state.season.dates[i]||'待公布')}</strong></li>`).join('')}</ul>`);}
 function participantNotices(){const notices=state.announcements.filter(n=>!n.target||['全体用户','all','本赛季选手'].includes(n.target)).slice(0,3);return panel('与我相关的公告','规则与赛程调整请及时查看。',notices.length?notices.map(n=>`<div class="participant-notice"><button class="link" data-action="read-notice:${esc(n.id)}">${!n.read?'<i class="participant-dot"></i>':''}${esc(n.title)}</button><p class="small muted">${esc(n.date)}</p></div>`).join(''):empty('暂无新公告'));}
 function participantDashboard(){return `<div class="participant-columns"><div class="participant-main">${participantWorks()}${state.ownProject?panel('阶段认证','里程碑用于认证项目阶段，通过本身不增加积分。',`<div class="participant-stage-row">${[1,2,3,4].map(step=>{const m=state.milestones.find(m=>m.projectId===state.ownProject.id&&m.step===step);return `<div><strong>M${step}</strong>${badge(m?.status||'未提交',m?.status==='已通过'?'green':'')}</div>`;}).join('')}</div>${participantLink('milestone','查看下一里程碑','sm')}`):''}</div><aside class="participant-aside">${participantTasks()}${participantDeadlines()}${participantNotices()}</aside></div>`;}
-function participantWorkspacePage(){return layout(`<div class="participant-workspace">${pageHead('我的赛季','先看进展，再迈出下一步。',button('切换演示场景','participant-demo-picker','sm')+participantLink('season?code='+state.season.code,'查看公开赛季','sm'))}<div class="participant-season-strip">${badge(activityDisplayStatus(),'pink')}<strong>${esc(state.season.name)}</strong><span>${esc(state.season.organizer)}</span>${state.participantDemo?badge('演示数据'):''}</div>${participantActivityList()}${participantSummary()}${participantDashboard()}${panel('奖励与赛季记录','项目成绩、个人参与和奖励状态分别保留。',participantLink('rewards','我的奖励与记录','sm'))}</div>`,'participant');}
+function participantWorkspacePage(){return layout(`<div class="participant-workspace">${pageHead('我的赛季','',button('切换演示场景','participant-demo-picker','sm')+participantLink('season?code='+state.season.code,'查看公开赛季','sm'))}${participantSeasonChips()}<div class="participant-season-strip">${badge(activityDisplayStatus(),'pink')}<strong>${esc(state.season.name)}</strong><span>${esc(state.season.organizer)}</span>${state.participantDemo?badge('演示数据'):''}</div>${participantActivityList()}${participantSummary()}${participantDashboard()}${panel('奖励与赛季记录','项目成绩、个人参与和奖励状态分别保留。',participantLink('rewards','我的奖励与记录','sm'))}</div>`,'participant');}
 function participantSeasonBody(){return `<div class="participant-season-heading"><div>${seasonPosterBadges()}<h1>${esc(state.season.name)}</h1><p>${esc(state.season.theme)}</p></div>${participantLink('workspace','我的赛季工作台','')}</div>${phaseNotice()}${participantSummary()}${participantDashboard()}<details class="participant-public-details"><summary>浏览本季公共信息 · 项目、榜单、命题与规则</summary>${guestPhaseContent()}</details>`;}
 PAGES.workspace=participantWorkspacePage;
 
 function participantRewardsPage(){const p=state.ownProject,r=participantReward();return layout(`${pageHead('我的奖励与记录','每一季的参与、成绩与奖励，都有清楚的记录。')}<div class="grid cols-3">${stat('项目贡献积分',p?projectScore(p):0,'积分归项目，不自动平分给成员')}${stat(r.label,money(r.amount),r.foot)}${stat('本人发布作品',state.works.filter(w=>w.projectId===p?.id&&w.authorId===actor).length,'过程记录会随赛季保留')}</div>${sectionHead('我的赛季记录')}${table(['赛季','项目与角色','阶段与成果','积分','奖励状态'],p?[[esc(state.season.name),esc(p.name)+'<span class="sub">发起人 · '+esc(p.members.join('、'))+'</span>',esc(p.stage)+' · '+esc(p.growth||'自述')+' / '+esc(p.r||'R0'),projectScore(p),badge(r.label,'pink')+'<span class="sub">'+money(r.amount)+'</span>']]:[])}${p?panel('参与证据','项目命题与阶段认证会随记录保存。',`<div class="chips">${projectTags(p)}</div><p class="muted">已通过 ${state.milestones.filter(m=>m.projectId===p.id&&m.status==='已通过').length} 项阶段认证，发布 ${state.works.filter(w=>w.projectId===p.id&&w.authorId===actor).length} 件作品。</p>${participantLink('project','查看项目记录','sm')}`):''}${sectionHead('对记录有疑问？')}${panel('评分复核与异议','对评分或结算记录有疑问，可提交说明并跟进处理状态。',button('提交异议','new-dispute')+((state.disputes||[]).length?table(['事项','处理状态'],state.disputes.map(d=>[esc(d.title),badge(d.status)])):''))}`,'participant');}
 PAGES.rewards=participantRewardsPage;
+
+/* My projects: one archive across activities — which activity, what progress, what gains. */
+function participantProjectEntries(){
+ const items=personaActivityRecords();
+ return (items.length?items:[{code:state.season.code,record:state}]).map(({code,record})=>({code,record,project:record.ownProject}));
+}
+function myProjectCard({code,record,project}){
+ const current=code===state.season.code,status=activityDisplayStatus(record),statusColor={'进行中':'green','报名中':'pink','结算中':'yellow'};
+ const passed=record.milestones.filter(m=>m.projectId===project.id&&m.status==='已通过').length,works=record.works.filter(w=>w.projectId===project.id).length;
+ return `<section class="panel my-project-card${current?' current':''}"><div class="my-project-activity"><div class="chips">${badge(record.season.code)}${badge(status,statusColor[status]||'')}${current?badge('当前活动','pink'):''}</div><span class="small muted">${esc(record.season.name)} · ${esc(record.season.organizer)}</span></div><div class="my-project-main"><div class="my-project-info"><h3>${esc(project.name)}</h3><p>${esc(project.tagline||project.description||'')}</p><div class="chips">${badge(project.stage+' · '+(project.growth||'自述'))}${badge('成员 · '+project.members.join('、'))}${badge('商业成果 '+(project.r||'R0'))}</div></div><dl class="my-project-metrics"><div><dt>阶段认证</dt><dd>${passed}<small>/4</small></dd></div><div><dt>赛季作品</dt><dd>${works}<small> 件</small></dd></div><div><dt>项目积分</dt><dd>${recordProjectScore(record)}</dd></div><div><dt>奖励状态</dt><dd class="my-project-reward">${esc(recordRewardLabel(record))}</dd></div></dl></div><div class="my-project-actions">${button('进入项目','enter-public-activity:'+code+':project','sm')}${current?'':button('进入该活动工作台','switch-my-activity:'+code,'sm')}</div></section>`;
+}
+function myProjectsPage(){
+ const entries=participantProjectEntries(),withProject=entries.filter(e=>e.project),pending=entries.filter(e=>!e.project&&e.record.application);
+ const total=withProject.reduce((s,e)=>s+recordProjectScore(e.record),0),n=participantNext();
+ return layout(`${pageHead('我的项目','每个活动一份项目档案：在哪个活动、走到哪一步、带回了什么。')}<div class="grid cols-3">${stat('我的项目',withProject.length,'每个活动最多登记一个本人项目')}${stat('参与活动',entries.filter(e=>e.project||e.record.application).length,'进行中与已结束的活动都保留记录')}${stat('累计项目积分',total,'积分归项目，不自动平分给成员')}</div>${withProject.length?`<div class="my-project-list">${withProject.map(myProjectCard).join('')}</div>`:empty('还没有项目','报名通过并开赛后，可以新建或带入项目。每个项目的进度与收获都会按活动分开记录。',n.disabled||!n.route?'':participantLink(n.route,n.label,'primary'))}${pending.length?panel('已报名、还没有项目的活动','开赛后可以在对应活动里创建或带入项目。',`<ul class="participant-activity-list">${pending.map(({code,record})=>`<li><div class="participant-activity-main"><strong>${esc(record.season.name)}</strong><span class="small muted">报名：${esc(record.application.status)}</span></div><div class="chips">${badge(activityDisplayStatus(record))}</div>${code===state.season.code?badge('当前活动','pink'):button('进入活动','switch-my-activity:'+code,'sm')}</li>`).join('')}</ul>`):''}`,'participant');
+}
+PAGES['my-projects']=myProjectsPage;

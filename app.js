@@ -78,8 +78,9 @@ function layout(content,workspaceRole=''){
  const title=ROUTES.find(r=>r[0]===currentRoute)?.[1]||'火热赛季';document.title=title+' — BoomLand';
  if(workspaceRole){
   const globalRoutes=['organizer-seasons','season-create','organizer-drafts'];
-  const nav=ROUTES.filter(r=>r[2]===workspaceRole&&!r[3]&&(workspaceRole!=='participant'||['workspace','project','rewards'].includes(r[0])));
-  const navLink=(r,icon)=>`<a href="#${r[0]}" class="${(r[0]===currentRoute||ROUTES.find(x=>x[0]===currentRoute)?.[3]===r[0]||r[0]==='admin-challenges'&&['challenge-manage','challenge-edit'].includes(currentRoute))?'active':''}" ${r[0]===currentRoute?'aria-current="page"':''}><span aria-hidden="true">${icon}</span>${esc(r[1])}</a>`;
+  const nav=ROUTES.filter(r=>r[2]===workspaceRole&&!r[3]&&(workspaceRole!=='participant'||['workspace','my-projects','rewards'].includes(r[0])));
+  const routeAncestors=(()=>{const out=[];let p=ROUTES.find(x=>x[0]===currentRoute)?.[3];while(p&&!out.includes(p)){out.push(p);p=ROUTES.find(x=>x[0]===p)?.[3];}return out;})();
+  const navLink=(r,icon)=>`<a href="#${r[0]}" class="${(r[0]===currentRoute||routeAncestors.includes(r[0])||r[0]==='admin-challenges'&&['challenge-manage','challenge-edit'].includes(currentRoute))?'active':''}" ${r[0]===currentRoute?'aria-current="page"':''}><span aria-hidden="true">${icon}</span>${esc(r[1])}</a>`;
   const organizerNav=workspaceRole==='organizer'?`${globalRoutes.map((id,i)=>navLink(ROUTES.find(r=>r[0]===id),['▦','＋','▤'][i])).join('')}<hr class="sidebar-divider"><label class="sidebar-season-label" for="organizer-season">赛季选择</label>${organizerSeasonSelect()}`:'';
   return `<div class="workspace"><aside class="sidebar" aria-label="${ROLES[workspaceRole]}导航"><div class="sidebar-title">${ROLES[workspaceRole]}工作台</div>${organizerNav}${nav.filter(r=>!globalRoutes.includes(r[0])).map((r,i)=>(workspaceRole==='enterprise'&&r[0]==='resources'?'<hr class="sidebar-divider">':'')+navLink(r,['◈','＋','▤','◇','⊞','◎','▣','◷','✳'][i%9])).join('')}<a class="back" href="#season">← 返回赛季</a></aside><main id="main" class="work-main" tabindex="-1">${workspaceRole==='enterprise'||workspaceRole==='organizer'&&globalRoutes.includes(currentRoute)?'':phaseNotice()}${content}</main></div>`;
  }
@@ -205,9 +206,10 @@ function publicActivityScenario(record,code){
  if(['A01','P00'].includes(code)&&record.publicSummary?.detailsPublished===false)return mockArchivedActivity(record);
  if(record.season.type==='workshop')record={...record,season:{...record.season,type:'season',formatLabel:record.season.formatLabel||'共创工作坊'}};
  if(code!=='S01'||record.season.name!==INITIAL.season.name||!record.season.approved||record.season.draft)return mockPublicNotices(record);
- if(!record.detailStateVersion)record={...record,phase:'upcoming',registration:'notOpen'};
- if(record.phase==='upcoming'&&record.registration==='notOpen'&&record.detailStateVersion!==2){
-  record=structuredClone(record);record.detailStateVersion=2;record.isEmptyDraft=true;record.activityProjects=[];record.application=null;record.ownProject=null;record.rewardsPaid=false;
+ // 公开侧的生长季始终固定为「即将开始」的演示状态；只有参赛者演示场景或主办方真正点过「开赛」（seasonStarted）才跟随实际阶段。
+ if(record.participantDemo||record.seasonStarted)return mockPublicNotices(record);
+ if(record.phase!=='upcoming'||record.registration!=='notOpen'||record.detailStateVersion!==2){
+  record=structuredClone(record);record.phase='upcoming';record.registration='notOpen';record.detailStateVersion=2;record.isEmptyDraft=true;record.activityProjects=[];record.application=null;record.ownProject=null;record.rewardsPaid=false;
   record.managedChallenges=(record.managedChallenges||CHALLENGES.map(c=>({...c,status:'已发布',version:1}))).map(c=>({...c,taken:0}));
   for(const key of ['applications','works','ledger','milestones','results','logs','rewardRecords'])record[key]=[];
   record.announcements=[{id:'s01-preview',title:'生长季即将开启',body:'本季命题、规则和赛程已公布，报名将于 2026 年 11 月 15 日开放。',target:'全体用户',status:'published',date:'2026-11-10',read:false}];
