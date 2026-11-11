@@ -3,7 +3,7 @@ const STORE_KEY='newboomland.prototype.v1';
 let state,storageAvailable=true;
 try{state=JSON.parse(localStorage.getItem(STORE_KEY)||'null');}catch{storageAvailable=false;}
 if(!state||state.version!==1)state=structuredClone(INITIAL);
-state=publicActivityScenario(state,state.season.code);
+state=publicActivityScenario(state,state.season.code,true);
 if(state.season.code==='H02'&&state.participantDemoVersion===2)save();
 let activeFilter='全部',searchText='',currentRoute='',toastTimer;
 const $=(s,root=document)=>root.querySelector(s);
@@ -129,11 +129,11 @@ function challengePublishedActivity(c){
 
 function upcomingEventFromRoute(){const code=new URLSearchParams(location.hash.split('?')[1]||'').get('code');return Object.hasOwn(UPCOMING_EVENTS,code)?UPCOMING_EVENTS[code]:null;}
 
-function publicActivityRecord(code){
- if(code===state.season.code&&code!=='S02')return publicActivityScenario(state,code);
- if(state.organizerSeasonRecords?.[code]&&code!=='S02')return publicActivityScenario(state.organizerSeasonRecords[code],code);
+function publicActivityRecord(code,adopt){
+ if(code===state.season.code&&code!=='S02')return publicActivityScenario(state,code,adopt);
+ if(state.organizerSeasonRecords?.[code]&&code!=='S02')return publicActivityScenario(state.organizerSeasonRecords[code],code,adopt);
  const record=structuredClone(INITIAL);record.role=state.role;
- if(code==='S01')return publicActivityScenario(record,code);
+ if(code==='S01')return publicActivityScenario(record,code,adopt);
  if(code==='S02'){const event=UPCOMING_EVENTS.S02;record.phase='upcoming';record.registration='notOpen';record.season={...record.season,code,name:'BoomLand '+event.name,theme:event.description,type:'season',dates:event.dates};record.isEmptyDraft=true;record.managedChallenges=[];record.activityProjects=[];for(const key of ['applications','works','ledger','judges','announcements','milestones','results'])record[key]=[];return mockPublicNotices(record);}
  if(code==='W01'){
   record.phase='upcoming';record.registration='open';record.season={...record.season,code,name:'BoomLand 共创工作坊',theme:'两天做出一个能给人用的东西',type:'season',formatLabel:'共创工作坊',dates:['2026-10-27','2026-11-11','2026-11-14','2026-11-14','2026-11-14','2026-11-15','2026-11-16','2026-11-18']};record.isEmptyDraft=true;record.managedChallenges=[];record.activityProjects=[];record.application=null;record.ownProject=null;for(const key of ['works','ledger','judges','announcements','milestones','results','draftChallenges','enterpriseChallengeDrafts','applications','logs'])record[key]=[];return mockWorkshopActivity(record);
@@ -198,16 +198,17 @@ function mockArchivedActivity(source){
 function withPublicActivity(code,view){const record=publicActivityRecord(code);if(!record)return view();const previous=state;state={...record,role:previous.role};try{return view();}finally{state=previous;}}
 function publicActivityInfo(code){const record=publicActivityRecord(code);const metrics=withPublicActivity(code,guestEventMetrics);const capacity=record.season.participantCapacity;return {code,name:record.season.name.replace(/^BoomLand\s*/,''),description:record.season.theme,status:activityDisplayStatus(record),group:record.registration==='open'&&record.phase==='upcoming'?'报名中':['upcoming'].includes(record.phase)?'即将开始':['active','workClosed','suspended'].includes(record.phase)?'进行中':'已结束',date:[record.season.dates[2],record.season.dates[6]].join(' — '),dates:record.season.dates,url:'#season?code='+code,count:record.phase==='upcoming'&&record.registration==='notOpen'?'报名尚未开放':'已通过 '+metrics.approved+(capacity?' / '+capacity:'')+' 人 · '+metrics.projects+' 个项目 · '+metrics.works+' 件作品',record,metrics};}
 
-function enterPublicActivity(code){const record=publicActivityRecord(code);if(!record)throw new Error('活动不存在。');const records={...(state.organizerSeasonRecords||{})};records[state.season.code]=organizerSnapshot();const role=state.role;state={...structuredClone(record),role,organizerSeasonRecords:records,pinnedSeasonCode:state.pinnedSeasonCode||record.pinnedSeasonCode};save();}
+function enterPublicActivity(code){const record=publicActivityRecord(code,true);if(!record)throw new Error('活动不存在。');const records={...(state.organizerSeasonRecords||{})};records[state.season.code]=organizerSnapshot();const role=state.role;state={...structuredClone(record),role,organizerSeasonRecords:records,pinnedSeasonCode:state.pinnedSeasonCode||record.pinnedSeasonCode};save();}
 
-function publicActivityScenario(record,code){
+function publicActivityScenario(record,code,adopt){
  if(code==='H02'&&record.participantDemo&&record.participantDemoVersion!==2)record=repairHackathonParticipantDemo(record);
  if(code==='W01'&&record.isEmptyDraft&&!record.mockDataVersion&&!record.activityProjects?.length&&!record.applications.length)return mockWorkshopActivity(record);
  if(['A01','P00'].includes(code)&&record.publicSummary?.detailsPublished===false)return mockArchivedActivity(record);
  if(record.season.type==='workshop')record={...record,season:{...record.season,type:'season',formatLabel:record.season.formatLabel||'共创工作坊'}};
  if(code!=='S01'||record.season.name!==INITIAL.season.name||!record.season.approved||record.season.draft)return mockPublicNotices(record);
- // 公开侧的生长季始终固定为「即将开始」的演示状态；只有参赛者演示场景或主办方真正点过「开赛」（seasonStarted）才跟随实际阶段。
- if(record.participantDemo||record.seasonStarted)return mockPublicNotices(record);
+ // 公开展示的生长季始终固定为「即将开始」，只有主办方真正点过「开赛」（seasonStarted）才跟随实际阶段。
+ // adopt=true 表示要把记录采纳为当前状态（启动自愈、enterPublicActivity），此时保留参赛者演示场景，避免演示数据被清空。
+ if(record.seasonStarted||(adopt&&record.participantDemo))return mockPublicNotices(record);
  if(record.phase!=='upcoming'||record.registration!=='notOpen'||record.detailStateVersion!==2){
   record=structuredClone(record);record.phase='upcoming';record.registration='notOpen';record.detailStateVersion=2;record.isEmptyDraft=true;record.activityProjects=[];record.application=null;record.ownProject=null;record.rewardsPaid=false;
   record.managedChallenges=(record.managedChallenges||CHALLENGES.map(c=>({...c,status:'已发布',version:1}))).map(c=>({...c,taken:0}));
