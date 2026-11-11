@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ff2385">
+  <meta name="description" content="BoomLand，把真实问题做成有人用的产品。赛季、作品、评审与商业合作交互原型。">
+  <title>BoomLand — 让想法生长</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%23ff2385'/%3E%3Ctext x='9' y='30' font-size='29' font-family='Arial' font-weight='900' fill='white'%3EB%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main" data-action="skip-main">跳到主要内容</a>
+  <header id="header"></header>
+  <div id="app"></div>
+  <footer id="footer"></footer>
+  <button id="preview-trigger" class="preview-trigger" aria-haspopup="dialog">◉ 预览设置</button>
+  <dialog id="modal" aria-labelledby="modal-title"></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="data.js" defer></script>
+  <script src="app.js" defer></script>
+  <script src="views.js" defer></script>
+  <script src="guest-seasons.js" defer></script>
+  <script src="interactions.js" defer></script>
+</body>
+</html>
