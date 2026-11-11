@@ -5,6 +5,8 @@ function managerPermission(){if(!isManager())throw new Error('需要本赛季主
 function openSimpleForm(title,id,fields,submit='保存'){openModal(title,form(id,`<div class="form-grid">${fields}</div>`,submit));}
 function syncApplication(a){if(state.application?.id===a.id)state.application={...a};}
 function handleClick(event){const el=event.target.closest('[data-action]');if(!el||el.disabled)return;const raw=el.dataset.action||'',[action,...parts]=raw.split(':'),id=parts.join(':');try{
+ if(action==='participant-demo-picker'){participantDemoPicker();return;}
+ if(action==='participant-demo'){loadParticipantDemo(id);return;}
  if(action==='skip-main'){event.preventDefault();$('#main')?.focus();return;}
  if(action==='toggle-rules'){const expanded=el.getAttribute('aria-expanded')==='true';const card=el.closest('[data-rule-card]');card.querySelectorAll('[data-extra-rule]').forEach(row=>{row.hidden=expanded;});el.setAttribute('aria-expanded',String(!expanded));el.textContent=expanded?'展开全部规则':'收起规则';return;}
  if(action==='copy-season'){managerPermission();confirmation('复制上季为新草稿','保留当前赛季。新草稿仅复制基本信息和规则，不带入预算、积分池、评委、命题与报名。','confirm-copy-season');return;}
@@ -23,6 +25,7 @@ function handleClick(event){const el=event.target.closest('[data-action]');if(!e
  if(action==='guest-login-continue'){const record=publicActivityRecord(id);if(!record||!record.season.approved||record.season.draft||record.registration!=='open'||!['upcoming','active','workClosed'].includes(record.phase))throw new Error('报名状态已改变。');enterPublicActivity(id);state.role='participant';save();closeModal();go('apply');render();return;}
  if(action==='follow'){state.followed=!state.followed;save();render();toast(state.followed?'已关注这个赛季':'已取消关注');return;}
  if(action==='list-normal'){state.listState='normal';save();render();return;}
+ if(action==='switch-my-activity'){enterPublicActivity(id);go('workspace');render();toast('已切换到 '+state.season.name);return;}
  if(action==='enter-public-activity'){event.preventDefault?.();enterPublicActivity(parts[0]);go(parts.slice(1).join(':')||(state.role==='visitor'?'season':roleHomes[state.role])||'season');render();return;}
  if(action==='featured-event'){selectFeaturedEvent(id);return;}
  if(action==='season-prev'||action==='season-next'){const events=featuredEvents();const i=events.findIndex(e=>e.code===selectedFeaturedEvent(events).code);selectFeaturedEvent(events[(i+(action==='season-next'?1:-1)+events.length)%events.length].code);return;}
