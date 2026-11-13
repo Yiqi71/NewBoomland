@@ -224,7 +224,7 @@ select.role-switch:hover{background:#f6eef3;color:#a00058}
 .my-project-card.current{border-color:var(--pink)}
 .my-project-activity{display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap;padding-bottom:14px;margin-bottom:16px;border-bottom:1px dashed var(--line)}
 .my-project-activity .chips{margin:0}
-.my-project-main{display:flex;gap:18px 32px;align-items:flex-start;flex-wrap:wrap}
+.my-project-main{display:flex;gap:18px 32px;align-items:center;flex-wrap:wrap}
 .my-project-info{flex:1;min-width:260px}
 .my-project-info h3{font-size:21px;margin-bottom:6px}
 .my-project-info p{color:var(--muted);font-size:13px;line-height:1.8;margin-bottom:12px}
@@ -235,3 +235,19 @@ select.role-switch:hover{background:#f6eef3;color:#a00058}
 .my-project-metrics dd.my-project-reward{font-size:13px;font-weight:700;line-height:1.6;max-width:170px}
 .my-project-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
 @media(max-width:760px){.my-project-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.my-project-actions .btn{flex:1;text-align:center}}
+
+/* Brand logo (BoomLand one-line SVG) */
+.brand img{height:24px;display:block;width:auto}
+.login-placeholder .login-logo{height:28px;width:auto}
+@media(max-width:760px){.brand img{height:20px}}
+@media(max-width:480px){.brand img{height:17px}}
+
+/* Avatar dropdown menu (我的) */
+.avatar-menu-wrap{position:relative}
+.avatar-menu{position:absolute;right:0;top:46px;min-width:230px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(40,20,35,.12);padding:8px;z-index:40;display:grid;gap:2px}
+.avatar-menu[hidden]{display:none}
+.avatar-menu-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 11px;border-radius:8px;font-size:13px;font-weight:600;white-space:nowrap}
+.avatar-menu-item:hover{background:#fff6fa}
+.avatar-menu-item small{color:var(--muted);font-weight:400}
+.avatar-menu-label{font-size:11px;color:var(--muted);padding:10px 11px 3px;border-top:1px solid var(--line);margin-top:4px}
+.avatar-menu-empty{font-size:12px;color:var(--muted);padding:4px 11px 8px;max-width:230px;white-space:normal}

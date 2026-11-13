@@ -8,11 +8,17 @@ const ROUTES = [
  ['admin','赛季治理','admin'],['admin-challenges','命题管理','admin'],['organizations','主办方组织与成员','admin'],['admin-points','积分池与评委','admin'],['ledger','评分记录与纠错','admin'],['admin-results','结果、预算与结算','admin']
 ];
 const ROLES = {visitor:'访客',participant:'参赛者',organizer:'主办方',judge:'评委',enterprise:'企业',admin:'平台管理员'};
-const PHASES = {upcoming:'即将开始',active:'进行中',workClosed:'作品已截止',settling:'结算中',ended:'已定格',archived:'已归档',suspended:'已暂停',cancelled:'已取消'};
+/* PRD 5.0：赛季状态只有 即将开始/进行中/结算中/已定格/已归档（旁路 已暂停/已取消）。
+   workClosed（作品截止后、评分截止前）是「进行中」的推演子态，不是赛季状态，
+   不出现在状态徽标与状态说明里；seasonStatus 对未列出的 phase 统一回落为「进行中」。 */
+const PHASES = {upcoming:'即将开始',active:'进行中',settling:'结算中',ended:'已定格',archived:'已归档',suspended:'已暂停',cancelled:'已取消'};
+/* 待定 17：赛季类型只有常规赛季与黑客松。预热季、共学季、共创工作坊等只是常规赛季的「形式标签」，
+   只能从下面的预设中选择；黑客松不挂形式标签。展示与校验都以这份白名单为准。 */
+const SEASON_FORMAT_LABELS = ['共创工作坊','产品共学季','预热季'];
 const CHALLENGES = [
- {id:'c1',symbol:'O',company:'Orion AI',name:'让园区闲置算力找到真正需要的人',type:'解决方案 / POC',description:'为中小团队建立可验证、可交易的算力撮合方案，让闲置设备产生新的价值。',resource:'测试算力 200 GPU 小时、两位技术导师、3 家园区试点',target:'完成一次真实用户测试，提交可运行原型与使用反馈。',capacity:6,taken:3,exclusive:false},
- {id:'c2',symbol:'S',company:'SheNicest',name:'把创作者的一次合作变成长久关系',type:'上下游合作',description:'为独立创作者和品牌搭建低成本的合作验证机制，让首次合作可以被持续复用。',resource:'5 个品牌访谈机会、渠道资源、商业顾问支持',target:'完成用户访谈，并形成一份双方愿意试用的合作方案。',capacity:8,taken:4,exclusive:false},
- {id:'c3',symbol:'F',company:'Field Notes',name:'把分散的产业信息变成可用的判断',type:'数据 / 研究',description:'用公开数据和一手研究，为进入新产业的团队提供有依据的决策工具。',resource:'行业数据样本、专家访谈、研究方法指导',target:'形成一个可复用的数据工具，并获得外部用户反馈。',capacity:5,taken:5,exclusive:true}
+ {id:'c1',symbol:'O',company:'Orion AI',name:'让园区闲置算力找到真正需要的人',type:'解决方案 / POC',description:'为中小团队建立可验证、可交易的算力撮合方案，让闲置设备产生新的价值。',audience:'需要弹性算力的中小 AI 团队与园区企业',resource:'测试算力 200 GPU 小时、两位技术导师、3 家园区试点',target:'完成一次真实用户测试，提交可运行原型与使用反馈。',capacity:6,taken:3,exclusive:false},
+ {id:'c2',symbol:'S',company:'SheNicest',name:'把创作者的一次合作变成长久关系',type:'上下游合作',description:'为独立创作者和品牌搭建低成本的合作验证机制，让首次合作可以被持续复用。',audience:'独立创作者与希望低成本验证合作的品牌',resource:'5 个品牌访谈机会、渠道资源、商业顾问支持',target:'完成用户访谈，并形成一份双方愿意试用的合作方案。',capacity:8,taken:4,exclusive:false},
+ {id:'c3',symbol:'F',company:'Field Notes',name:'把分散的产业信息变成可用的判断',type:'数据 / 研究',description:'用公开数据和一手研究，为进入新产业的团队提供有依据的决策工具。',audience:'准备进入新产业的早期团队与研究者',resource:'行业数据样本、专家访谈、研究方法指导',target:'形成一个可复用的数据工具，并获得外部用户反馈。',capacity:5,taken:5,exclusive:true}
 ];
 const PROJECTS = [
  {id:'p1',name:'园区算力拼车',tagline:'闲置算力，找到下一位使用者。',icon:'↗',challenges:['c1'],members:['程远','许知'],stage:'生长',r:'R3',growth:'认证',rVerified:true,base:0},
@@ -35,6 +41,6 @@ const INITIAL = {
 };
 
 const UPCOMING_EVENTS={
- S02:{code:'S02',name:'种子季',description:'先让十个陌生人用上你的东西',registrationDates:['2027-03-15','2027-04-15'],type:'常规赛季',dates:['2027-03-15','2027-04-15','2027-04-17','2027-04-24','2027-04-23','2027-06-19','2027-06-26','2027-07-03']}
+ S02:{code:'S02',name:'种子季',description:'先让十个陌生人用上你的东西',type:'常规赛季',dates:['2027-03-15','2027-04-15','2027-04-17','2027-04-24','2027-04-23','2027-06-19','2027-06-26','2027-07-03']}
 };
 const HACKATHON_EVENT={code:'H02',name:'城市黑客松',description:'两天，一次跨专业的真实共创',type:'黑客松',dates:['2026-10-20','2026-11-08','2026-11-09','2026-11-09','2026-11-09','2026-11-11','2026-11-12','2026-11-15']};
