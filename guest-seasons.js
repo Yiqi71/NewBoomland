@@ -10,7 +10,6 @@ function guestFormatDay(value){if(!value)return '待公布';const parts=value.sl
 function guestMoney(value){return value==null?'待公布':money(value);}
 function guestToday(){return new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});}
 function guestCanRegister(){return state.season.approved&&!state.season.draft&&state.registration==='open'&&['upcoming','active','workClosed'].includes(state.phase);}
-function guestRegistrationLabel(){if(['settling','ended','archived','cancelled'].includes(state.phase))return '报名已截止';return {notOpen:'报名未开放',open:'报名中',closed:'报名已截止'}[state.registration]||'报名未开放';}
 function guestBasePhase(){if(state.phase==='suspended')return state.previousPhase||'active';if(state.phase==='cancelled')return state.cancelledFromPhase||(guestWorks().length?'active':'upcoming');return state.phase;}
 function guestSettlementDate(){return state.expectedFreezeDate||state.season.expectedFreezeDate||state.season.dates[7];}
 function guestPhaseTarget(){const phase=guestBasePhase();if(['ended','archived'].includes(phase))return null;if(phase==='settling')return {label:'预计定格',date:guestSettlementDate(),count:false};if(phase==='upcoming')return state.registration==='open'?{label:'距报名截止',date:state.season.dates[1],count:true}:{label:'距开赛',date:state.season.dates[2],count:true};return {label:phase==='workClosed'?'距评分截止':'距作品截止',date:state.season.dates[phase==='workClosed'?6:5],count:true};}
@@ -27,7 +26,6 @@ function guestRoute(route,label,kind=''){return button(label,'enter-public-activ
 function guestHeroRoleAction(phase){
  const enter=route=>'enter-public-activity:'+state.season.code+':'+route;
  const deadline=i=>state.season.dates[i]?new Date(state.season.dates[i]+'T23:59:59+08:00').getTime():NaN;
- if(state.role==='admin')return {label:'查看赛季治理',action:enter('admin')};
  if(state.role==='organizer'){
   if(!state.season.approved&&!state.season.draft)return {label:'等待平台批准',disabled:true};
   if(registrationDisplayLabel()==='报名中')return {label:'主办方后台 · 待审核 '+state.applications.filter(a=>a.status==='审核中').length,action:enter('applications')};
@@ -69,7 +67,7 @@ function guestHero(){
  const summaryCount=guestEventMetrics().projects;
  const follow=phase==='cancelled'?'':seasonFollowButton();
  const secondary=phase==='upcoming'&&state.registration==='closed'?button('浏览命题','guest-scroll:guest-challenges'):'';
- return `<section class="season-state-hero guest-season-hero" data-phase="${esc(phase)}" data-registration="${esc(state.registration)}"><div class="season-state-copy">${seasonPosterBadges()}<h1>${esc(state.season.name).replace(/^BoomLand\s*/,'BoomLand<br>')}</h1><p class="season-state-theme">${esc(state.season.theme)}</p>${seasonPosterDate('报名',state.season.dates[0],state.season.dates[1])}${seasonPosterDate('活动',state.season.dates[2],state.season.dates[6])}${phase==='cancelled'?'':`<div class="season-state-dates"><img src="${base}users.svg" alt=""><span>${summaryCount} 个项目 · 核心团队 1—${state.season.teamLimit||3} 人</span></div>`}${guestCountdown()}</div><div class="season-state-action">${follow}${actionMarkup}</div></section>${secondary?`<div class="season-detail-entry">${secondary}</div>`:''}`;
+ return `<section class="season-state-hero guest-season-hero" data-phase="${esc(phase)}" data-registration="${esc(state.registration)}"><div class="season-state-copy">${seasonPosterBadges()}<h1>${esc(state.season.name).replace(/^BoomLand\s*/,'BoomLand<br>')}</h1><p class="season-state-theme">${esc(state.season.theme)}</p>${seasonPosterDate('报名',state.season.dates[0],state.season.dates[1])}${seasonPosterDate('活动',state.season.dates[2],state.season.dates[6])}${phase==='cancelled'||guestBasePhase()==='upcoming'?'':`<div class="season-state-dates"><img src="${base}users.svg" alt=""><span>${summaryCount} 个项目</span></div>`}${guestCountdown()}</div><div class="season-state-action">${follow}${actionMarkup}</div></section>${secondary?`<div class="season-detail-entry">${secondary}</div>`:''}`;
 }
 function guestStateOverlay(){if(!['suspended','cancelled'].includes(state.phase))return '';const cancelled=state.phase==='cancelled';const reason=(cancelled?state.cancelReason:state.pauseReason)||guestPublicAnnouncements().find(n=>n.title.includes(cancelled?'取消':'暂停'))?.body||'主办方暂未公布原因。';return `<section class="panel guest-state-overlay ${cancelled?'cancelled':''}" role="status"><h2>${cancelled?'赛季已取消':'赛季已暂停'}</h2><p>${esc(reason)}</p><p>${cancelled?(guestCancelledAfterStart()?'积分保留为档案，不发奖。':'活动已取消，报名已停止。'):'报名、作品提交与评分已暂停，原赛程不自动顺延。'}</p></section>`;}
 function guestTimeline(){return `<section class="panel guest-timeline" aria-label="完整赛程时间轴">${seasonDetailTimeline()}</section>`;}
@@ -138,14 +136,10 @@ function guestSeasonPage(code){
 }
 function guestFinalResultsPage(){if(!state.season.approved||state.season.draft)return layout(`<div class="container">${empty('这个赛季尚未公开')}</div>`);return layout(`<div class="container"><a class="link" href="#season?code=${esc(state.season.code)}">← 赛季详情</a>${challengeHeading('赛后结果')}<p>${esc(state.season.name)}</p>${guestStats()}${guestTopProjects(true,true)}${guestOutcomesSection(true)}${guestFinalSummary()}</div>`);}
 
-function guestApplyGate(){const code=new URLSearchParams(location.hash.split('?')[1]||'').get('code')||state.season.code;const record=publicActivityRecord(code);if(!record||!record.season.approved||record.season.draft)return layout(`<div class="container">${empty('这个赛季尚未公开')}</div>`);return withPublicActivity(code,()=>layout(`<div class="container">${empty(guestCanRegister()?'登录后报名':guestRegistrationLabel(),'',guestCanRegister()?button('登录并报名','guest-register:'+code,'primary'):button('查看赛季详情','#season?code='+code))}</div>`));}
+function guestApplyGate(){const code=new URLSearchParams(location.hash.split('?')[1]||'').get('code')||state.season.code;const record=publicActivityRecord(code);if(!record||!record.season.approved||record.season.draft)return layout(`<div class="container">${empty('这个赛季尚未公开')}</div>`);return withPublicActivity(code,()=>layout(`<div class="container">${empty(guestCanRegister()?'登录后报名':registrationDisplayLabel()||({suspended:'赛季已暂停',cancelled:'赛季已取消'}[state.phase]||'报名已截止'),'',guestCanRegister()?button('登录并报名','guest-register:'+code,'primary'):button('查看赛季详情','#season?code='+code))}</div>`));}
 
 function guestProjectList(){const projects=guestProjects();return `<section id="guest-live" class="guest-section"><h2>参赛项目</h2>${projects.length?table(['项目','命题','阶段','作品',''],projects.map(p=>[esc(p.name),projectTags(p),esc(p.stage||'—'),guestWorks().filter(w=>w.projectId===p.id).length,guestRoute('project?id='+p.id,'查看项目','sm')])):empty('暂无公开项目')}</section>`;}
 function guestRuleHistory(){const history=state.season.ruleVersions||[];return `<details class="guest-rule-history"><summary>规则变更记录${history.length?' · '+history.length:''}</summary>${history.length?history.slice().reverse().map(v=>`<article><h3>V${Number(v.version)} · ${esc(v.date)}</h3><ul>${v.changes.map(change=>`<li>${esc(change.label)}：${esc(change.before)} → ${esc(change.after)}</li>`).join('')}</ul></article>`).join(''):empty('暂无规则变更记录')}</details>`;}
-/* TODO(M3)：按 PRD 9.6 / ARC-001，火热赛季页轮播切换后应在下方渲染所选赛季的
-   公告/命题/规则/前5/动态（即本函数）。当前列表页只放卡片，接线时注意同步调整
-   tests/validate.py 中「Season detail embedded in listing」断言。 */
-function guestHomeContent(code){return withPublicActivity(code,()=>`<section class="guest-home-context"><div class="section-heading"><h2>${esc(state.season.name)}</h2>${button('赛季详情','#season?code='+code)}</div>${guestPhaseContent()}</section>`);}
 
 function guestCancelledAfterStart(){const from=state.cancelledFromPhase;if(from)return from==='suspended'?(state.previousPhase||'active')!=='upcoming':from!=='upcoming';return guestPublishedWorks().length>0||effective().length>0;}
 /* DEMO-* 赛季只是主办方后台的状态样例（内容复制自 S01），不进入访客可见的往季档案、命题库与筛选。 */

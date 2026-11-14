@@ -261,3 +261,6 @@ select.role-switch:hover{background:#f6eef3;color:#a00058}
 .org-checks{display:flex;gap:6px 18px;flex-wrap:wrap;margin:6px 0 10px}
 .season-chip.followed{border-style:dashed;background:#fff}.season-chip.followed .season-chip-hint{color:#8a7f86}
 .sidebar a svg{flex-shrink:0;color:#b7a9b8}.sidebar a.active svg,.sidebar a:hover svg{color:var(--pink-dark)}
+/* 进行中卡片的 9.6 统计行：选手·项目·作品·R5·积分池使用率；有报名按钮时收窄避开按钮 */
+.event-ticket-projects{width:384px}.event-ticket-projects.narrow{width:240px}
+.event-ticket-projects .event-ticket-stats-text{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

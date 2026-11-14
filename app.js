@@ -297,11 +297,6 @@ function registrationDisplayLabel(record=state){
  if(record.phase==='upcoming')return record.registration==='notOpen'?'报名未开放':'报名已截止';
  return '';
 }
-function activityRegistrationStatus(record=state){
- if(record.phase==='cancelled')return '活动已取消';
- if(['active','workClosed','settling','ended','archived'].includes(record.phase))return '报名已截止';
- return {notOpen:'报名未开放',open:'报名中',closed:'报名已截止'}[record.registration]||'报名未开放';
-}
 
 function seasonRuleSnapshot(){const s=state.season;return {scoring:s.scoringEnabled===false?'不计分':'计分',challengeLimit:s.challengeLimit||3,projectLimit:s.projectLimit||1,teamLimit:s.teamLimit||3,cap:s.cap,ratio:s.ratio,threshold:s.threshold,budget:s.budget,pool:s.pool,dates:s.dates.join(' / '),optionalRules:(s.optionalRules||[]).join('；')};}
 function recordSeasonRuleChange(before){const after=seasonRuleSnapshot();const labels={scoring:'计分方式',challengeLimit:'项目命题上限',projectLimit:'每人项目数',teamLimit:'核心团队人数',cap:'单次评分上限',ratio:'兑换比例',threshold:'大额复核阈值',budget:'奖励预算',pool:'积分池总量',dates:'赛程',optionalRules:'补充规则'};const changes=Object.keys(labels).filter(key=>String(before[key])!==String(after[key])).map(key=>({label:labels[key],before:String(before[key]??'—'),after:String(after[key]??'—')}));if(!changes.length)return;const history=state.season.ruleVersions||[];state.season.ruleVersions=[...history,{version:(history.at(-1)?.version||1)+1,date:new Date().toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'}),changes}];}
