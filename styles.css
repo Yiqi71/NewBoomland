@@ -251,3 +251,13 @@ select.role-switch:hover{background:#f6eef3;color:#a00058}
 .avatar-menu-item small{color:var(--muted);font-weight:400}
 .avatar-menu-label{font-size:11px;color:var(--muted);padding:10px 11px 3px;border-top:1px solid var(--line);margin-top:4px}
 .avatar-menu-empty{font-size:12px;color:var(--muted);padding:4px 11px 8px;max-width:230px;white-space:normal}
+/* 赛季状态与报名状态并列显示（PRD 5.0）：票卡右上角用一个 flex 容器放两枚状态章 */
+.event-ticket-statuses{position:absolute;right:14px;top:15px;display:flex;gap:6px;align-items:center}
+.event-ticket-statuses .event-ticket-status{position:static;left:auto;right:auto;top:auto;width:auto;min-width:0;height:26px;padding:0 12px;font-size:12px;line-height:18px;white-space:nowrap}
+.event-ticket-status.reg{background:#fff;border-color:#ffc5df}
+/* 管理者预览未公开赛季的顶部横幅（SDP-001） */
+.guest-preview-banner{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin:18px 0;border-color:#e9cb8f;background:#fff9eb}
+.guest-preview-banner h2{margin-bottom:6px;font-size:18px}.guest-preview-banner p{margin:0}
+.org-checks{display:flex;gap:6px 18px;flex-wrap:wrap;margin:6px 0 10px}
+.season-chip.followed{border-style:dashed;background:#fff}.season-chip.followed .season-chip-hint{color:#8a7f86}
+.sidebar a svg{flex-shrink:0;color:#b7a9b8}.sidebar a.active svg,.sidebar a:hover svg{color:var(--pink-dark)}

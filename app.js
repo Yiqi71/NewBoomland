@@ -14,6 +14,10 @@ const fmtDate=d=>d?d.slice(5).replace('-',' / '):'待设置';
 const seasonStatus=(item=state)=>item.phase==='cancelled'?'已取消':item.season.draft?'草稿':!item.season.approved?'待平台批准':PHASES[item.phase]||'进行中';
 const phase=()=>seasonStatus();
 const SEASON_STATUS_NOTES={'草稿':'完善赛程、规则与预算后提交平台。','待平台批准':'已提交申请，等待平台审核。','即将开始':'已获批准，等待正式开赛。','进行中':'选手正在发布作品，评委持续评分。','结算中':'处理异议、复核评分并核定奖励。','已定格':'成绩与奖励已核定，等待完成发放。','已归档':'奖励已发放，保留赛季与成果记录。','已暂停':'报名、作品提交与评分暂时停止。','已取消':'活动已取消，保留记录，不发放奖励。'};
+/* 多主办方组织（SEA-001、9.10）：新数据存 season.organizerOrgs 数组；
+   旧记录只有 organizer 字符串，读取时回落拆分，不迁移、不影响已创建的记录。 */
+function seasonOrganizerOrgs(record=state){const s=record.season;if(Array.isArray(s.organizerOrgs)&&s.organizerOrgs.length)return s.organizerOrgs;return String(s.organizer||'').split(/[×、,，/]/).map(x=>x.trim()).filter(Boolean);}
+function seasonOrganizerLabel(record=state){return seasonOrganizerOrgs(record).join(' × ')||String(record.season.organizer||'');}
 function ensureDemoSeasons(){
  if(state.demoSeasonsVersion===1)return;
  const records={...(state.organizerSeasonRecords||{})};
@@ -74,15 +78,47 @@ function canWrite(kind){if(state.phase==='suspended')return '赛季暂停期间�
  if(kind==='score'){if(!['active','workClosed'].includes(state.phase))return '当前阶段不能新增评分，只有进行中且未过评分截止可以评分。';if(state.role!=='judge')return '需要切换到具有有效授权的评委身份。';if(!judge()?.active)return '当前评分授权已停用。';return '';}
  if(state.phase!=='active')return kind==='work'&&state.phase==='workClosed'?'作品截止后不能发布新作品或新版本，但仍可查看评分。':'当前阶段不能提交这类内容。';
  if(['project','work','milestone','result'].includes(kind)&&state.role!=='participant')return '只有参赛者可以操作本人项目。';if(kind==='project'&&state.application?.status!=='已通过')return '报名通过后才可以创建或带入项目。';if(kind!=='project'&&['work','milestone','result'].includes(kind)&&!state.ownProject)return '请先创建或带入本人项目。';return '';}
+/* 工作台侧边栏图标：按路由 id 取专属线性图标（24px viewBox，描边风格与顶栏一致），未登记的路由用圆点兜底。 */
+const NAV_ICONS={
+ workspace:'<path d="M5 21V4"/><path d="M5 4c4-2 6 2 10 0v9c-4 2-6-2-10 0"/>',
+ 'my-projects':'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+ rewards:'<circle cx="12" cy="9" r="5"/><path d="m9.2 13.4-1.7 7.1 4.5-2.5 4.5 2.5-1.7-7.1"/>',
+ 'organizer-seasons':'<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+ 'season-create':'<circle cx="12" cy="12" r="8.5"/><path d="M12 8.5v7M8.5 12h7"/>',
+ 'organizer-drafts':'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
+ organizer:'<rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="13.5" width="7" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/>',
+ 'season-config':'<path d="M5 3.5v7.5M5 15v5.5M12 3.5V6M12 10v10.5M19 3.5V15M19 19v1.5"/><path d="M3 11h4M10 8h4M17 15h4"/>',
+ 'season-manage':'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 11h16"/>',
+ applications:'<circle cx="9" cy="8.5" r="3.5"/><path d="M3.5 20c.6-3.4 2.6-5.2 5.5-5.2s4.9 1.8 5.5 5.2"/><path d="M15.5 5.5a3.5 3.5 0 0 1 0 6"/><path d="M16.8 15.2c2.1.8 3.4 2.4 3.7 4.8"/>',
+ 'challenge-manage':'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/>',
+ points:'<ellipse cx="12" cy="6.5" rx="7" ry="3"/><path d="M5 6.5V17c0 1.7 3.1 3 7 3s7-1.3 7-3V6.5"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/>',
+ review:'<rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="m8.5 12.2 2.4 2.4 4.8-4.8"/>',
+ budget:'<rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10.5h18"/><path d="M7 15.5h4"/>',
+ announcements:'<path d="M17.5 8.5a3.2 3.2 0 0 1 0 6"/><path d="M13.5 4.5V19l-5-3.5H5.5a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3l5-4z"/>',
+ judge:'<path d="M12 4v16M8.5 20h7"/><path d="M4 7h16"/><path d="m7 7-2.8 6a3 3 0 0 0 5.6 0L7 7zM17 7l-2.8 6a3 3 0 0 0 5.6 0L17 7z"/>',
+ score:'<path d="m12 4.3 2.3 4.7 5.2.8-3.8 3.7.9 5.2-4.6-2.4-4.6 2.4.9-5.2L4.5 9.8l5.2-.8z"/>',
+ 'my-scores':'<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3L4.5 8.9"/><path d="M4.5 4.5v4.4h4.4"/><path d="M12 8.5v4l2.7 1.8"/>',
+ enterprise:'<path d="M5.5 21V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v16"/><path d="M3 21h18"/><path d="M9.5 7h1.6M13 7h1.6M9.5 10.8h1.6M13 10.8h1.6M9.5 14.6h1.6M13 14.6h1.6"/>',
+ 'challenge-draft':'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11.5v5M9.5 14h5"/>',
+ 'enterprise-drafts':'<path d="M4 20h4L20.2 7.8a1.8 1.8 0 0 0 0-2.6l-1.4-1.4a1.8 1.8 0 0 0-2.6 0L4 16z"/><path d="m13.5 6.5 4 4"/>',
+ resources:'<path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
+ partnership:'<path d="M10 13.5a4 4 0 0 1 0-5.6l3.2-3.2a4 4 0 0 1 5.6 5.6l-1.5 1.5"/><path d="M14 10.5a4 4 0 0 1 0 5.6l-3.2 3.2a4 4 0 0 1-5.6-5.6l1.5-1.5"/>',
+ admin:'<path d="M12 3.5 19.5 6v6c0 4.6-3.2 7.4-7.5 8.5C7.7 19.4 4.5 16.6 4.5 12V6z"/><path d="m9 12 2.2 2.2 4.3-4.4"/>',
+ organizations:'<circle cx="12" cy="6" r="2.6"/><circle cx="6" cy="18" r="2.6"/><circle cx="18" cy="18" r="2.6"/><path d="M12 8.6v3.6M12 12.2 7.6 16M12 12.2l4.4 3.8"/>',
+ ledger:'<path d="M9 6h12M9 12h12M9 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
+ 'admin-results':'<path d="M4.5 20.5h15"/><path d="M6.5 20.5v-8M12 20.5V4.5M17.5 20.5V10"/>'
+};
+NAV_ICONS['admin-challenges']=NAV_ICONS['challenge-manage'];NAV_ICONS['admin-points']=NAV_ICONS.points;
+function navIcon(id){return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${NAV_ICONS[id]||'<circle cx="12" cy="12" r="3.5"/>'}</svg>`;}
 function layout(content,workspaceRole=''){
  const title=ROUTES.find(r=>r[0]===currentRoute)?.[1]||'火热赛季';document.title=title+' — BoomLand';
  if(workspaceRole){
   const globalRoutes=['organizer-seasons','season-create','organizer-drafts'];
   const nav=ROUTES.filter(r=>r[2]===workspaceRole&&!r[3]&&(workspaceRole!=='participant'||['workspace','my-projects','rewards'].includes(r[0])));
   const routeAncestors=(()=>{const out=[];let p=ROUTES.find(x=>x[0]===currentRoute)?.[3];while(p&&!out.includes(p)){out.push(p);p=ROUTES.find(x=>x[0]===p)?.[3];}return out;})();
-  const navLink=(r,icon)=>`<a href="#${r[0]}" class="${(r[0]===currentRoute||routeAncestors.includes(r[0])||r[0]==='admin-challenges'&&['challenge-manage','challenge-edit'].includes(currentRoute))?'active':''}" ${r[0]===currentRoute?'aria-current="page"':''}><span aria-hidden="true">${icon}</span>${esc(r[1])}</a>`;
-  const organizerNav=workspaceRole==='organizer'?`${globalRoutes.map((id,i)=>navLink(ROUTES.find(r=>r[0]===id),['▦','＋','▤'][i])).join('')}<hr class="sidebar-divider"><label class="sidebar-season-label" for="organizer-season">赛季选择</label>${organizerSeasonSelect()}`:'';
-  return `<div class="workspace"><aside class="sidebar" aria-label="${ROLES[workspaceRole]}导航"><div class="sidebar-title">${ROLES[workspaceRole]}工作台</div>${organizerNav}${nav.filter(r=>!globalRoutes.includes(r[0])).map((r,i)=>(workspaceRole==='enterprise'&&r[0]==='resources'?'<hr class="sidebar-divider">':'')+navLink(r,{'my-projects':'▣'}[r[0]]||['◈','＋','▤','◇','⊞','◎','▣','◷','✳'][i%9])).join('')}<a class="back" href="#season">← 返回赛季</a></aside><main id="main" class="work-main" tabindex="-1">${workspaceRole==='enterprise'||workspaceRole==='organizer'&&globalRoutes.includes(currentRoute)?'':phaseNotice()}${content}</main></div>`;
+  const navLink=r=>`<a href="#${r[0]}" class="${(r[0]===currentRoute||routeAncestors.includes(r[0])||r[0]==='admin-challenges'&&['challenge-manage','challenge-edit'].includes(currentRoute))?'active':''}" ${r[0]===currentRoute?'aria-current="page"':''}>${navIcon(r[0])}${esc(r[1])}</a>`;
+  const organizerNav=workspaceRole==='organizer'?`${globalRoutes.map(id=>navLink(ROUTES.find(r=>r[0]===id))).join('')}<hr class="sidebar-divider"><label class="sidebar-season-label" for="organizer-season">赛季选择</label>${organizerSeasonSelect()}`:'';
+  return `<div class="workspace"><aside class="sidebar" aria-label="${ROLES[workspaceRole]}导航"><div class="sidebar-title">${ROLES[workspaceRole]}工作台</div>${organizerNav}${nav.filter(r=>!globalRoutes.includes(r[0])).map(r=>(workspaceRole==='enterprise'&&r[0]==='resources'?'<hr class="sidebar-divider">':'')+navLink(r)).join('')}<a class="back" href="#season">← 返回赛季</a></aside><main id="main" class="work-main" tabindex="-1">${workspaceRole==='enterprise'||workspaceRole==='organizer'&&globalRoutes.includes(currentRoute)?'':phaseNotice()}${content}</main></div>`;
  }
  return `<main id="main" tabindex="-1">${content}</main>`;
 }
@@ -142,8 +178,36 @@ function publicActivityRecord(code,adopt){
   record.phase='upcoming';record.registration='open';record.season={...record.season,code,name:'BoomLand 共创工作坊',theme:'两天做出一个能给人用的东西',type:'season',formatLabel:'共创工作坊',participantCapacity:24,dates:['2026-10-27','2026-11-11','2026-11-14','2026-11-14','2026-11-14','2026-11-15','2026-11-16','2026-11-18']};record.isEmptyDraft=true;record.managedChallenges=[];record.activityProjects=[];record.application=null;record.ownProject=null;for(const key of ['works','ledger','judges','announcements','milestones','results','draftChallenges','enterpriseChallengeDrafts','applications','logs'])record[key]=[];return mockWorkshopActivity(record);
  }
  if(['A01','P00'].includes(code)){const archive=code==='P00';record.phase=archive?'archived':'ended';record.registration='closed';record.season={...record.season,code,name:archive?'预热季':'产品共学季 · 秋季',theme:archive?'平台上线前的第一次公开征集':'每周一个产品命题，一起把话讲清楚',formatLabel:archive?'预热季':'产品共学季',dates:archive?['2026-07-20','2026-08-01','2026-08-02','2026-08-03','2026-08-02','2026-08-16','2026-08-17','2026-08-20']:['2026-10-01','2026-10-10','2026-10-11','2026-10-12','2026-10-11','2026-10-25','2026-10-26','2026-10-31']};record.activityProjects=[];record.managedChallenges=[];record.application=null;record.ownProject=null;record.rewardsPaid=archive;record.publicSummary={projects:archive?13:32,detailsPublished:false};record.season.budget=null;record.season.pool=null;for(const key of ['works','ledger','judges','announcements','milestones','results','draftChallenges','enterpriseChallengeDrafts','applications','logs'])record[key]=[];return mockArchivedActivity(record);}
+ if(code==='H01')return mockPastHackathon(record);
  if(code!=='H02')return null;
  return freshHackathonRecord(state.role);
+}
+
+/* ARC-002 / ARC-006：往季档案需要包含历史黑客松。H01 是已归档的首季城市黑客松演示数据，
+   数据自洽：评分均已复核、奖励=项目积分×比例且已发放、成果已核验。 */
+function mockPastHackathon(record){
+ const code='H01';record.phase='archived';record.registration='closed';
+ record.season={...record.season,code,name:'BoomLand 城市黑客松 · 首季',theme:'48 小时，把一个街区问题做成能用的东西',type:'hackathon',dates:['2026-04-01','2026-04-17','2026-04-18','2026-04-18','2026-04-18','2026-04-19','2026-04-20','2026-04-24'],budget:5000,pool:5000,ratio:1,frozenAt:'2026-04-24',unallocatedDisposition:'未分配积分收回，不折算奖励；未使用奖励预算退回主办方。'};
+ record.managedChallenges=[{...structuredClone(CHALLENGES[0]),id:'h1c1',symbol:'F',company:'Field Notes',name:'让街区的公共信息更容易被看见',type:'解决方案 / POC',description:'为街区公告、活动与设施信息设计一个居民愿意用的查询方式。',audience:'街区居民与社区工作者',resource:'街区调研支持、设计导师与试点点位',target:'完成可演示原型，并留下现场使用反馈。',status:'已归档',taken:2,capacity:8,version:1,exclusive:false}];
+ record.judges=[{id:'h1-judge',name:'林舟',company:'Field Notes',scope:'all',allocated:600,active:true,conflictDisclosure:'与参赛项目无利益关系'}];
+ record.activityProjects=[
+  {id:'h1p1',name:'街角信息亭',tagline:'把街区公告放进一张可扫码的地图。',icon:'▦',challenges:['h1c1'],members:['陈默','周予'],stage:'开花',r:'R3',rVerified:true,base:0,publicInteractionCount:64,publicPartners:['Field Notes'],publicCooperationStatus:'已完成本季合作'},
+  {id:'h1p2',name:'设施随手报',tagline:'让居民一分钟上报街区设施问题。',icon:'↗',challenges:['h1c1'],members:['苏禾'],stage:'生长',r:'R2',base:0,publicInteractionCount:27,publicPartners:[],publicCooperationStatus:'已完成本季合作'}];
+ record.works=[
+  {id:'h1w1',projectId:'h1p1',title:'街区信息地图原型与首轮现场测试',type:'原型',body:'完成可扫码的街区信息地图原型，在两个点位完成首轮现场测试。',summary:'原型演示与现场测试记录',author:'陈默',authorId:'member-h1p1',version:1,tag:'h1c1',visibility:'public',date:'2026-04-18',evidence:[]},
+  {id:'h1w2',projectId:'h1p1',title:'48 小时试点：扫码查询的真实使用记录',type:'客户反馈',body:'整理试点期间居民的扫码查询记录与反馈，形成下一步改进清单。',summary:'试点使用数据与居民反馈',author:'周予',authorId:'member-h1p1',version:1,tag:'h1c1',visibility:'public',date:'2026-04-19',evidence:[]},
+  {id:'h1w3',projectId:'h1p2',title:'设施问题上报流程原型',type:'原型',body:'完成拍照上报与处理状态查询流程，三位居民完成任务测试。',summary:'上报流程原型与任务测试记录',author:'苏禾',authorId:'member-h1p2',version:1,tag:'h1c1',visibility:'public',date:'2026-04-19',evidence:[]}];
+ record.ledger=[
+  {id:'h1l1',workId:'h1w1',version:1,judgeId:'h1-judge',judge:'林舟',points:160,reason:'原型完成度高，现场测试证据完整。',reviewed:true,reversed:false,date:'2026-04-19'},
+  {id:'h1l2',workId:'h1w2',version:1,judgeId:'h1-judge',judge:'林舟',points:140,reason:'真实使用数据支撑了方案价值与改进方向。',reviewed:true,reversed:false,date:'2026-04-20'},
+  {id:'h1l3',workId:'h1w3',version:1,judgeId:'h1-judge',judge:'林舟',points:120,reason:'流程可运行，任务测试记录完整。',reviewed:true,reversed:false,date:'2026-04-20'}];
+ record.applications=['陈默','周予','苏禾'].map((name,i)=>({id:'h1a'+i,name,status:'已通过',group:'已加入'}));
+ record.results=[{id:'h1r1',projectId:'h1p1',visibility:'public',status:'已核验',level:'R3',title:'街区信息地图完成两个点位的真实试点',date:'2026-04-19'}];
+ record.rewardRecords=[{id:'h1p1-reward',projectId:'h1p1',amount:300,status:'paid'},{id:'h1p2-reward',projectId:'h1p2',amount:120,status:'paid'}];
+ record.rewardsPaid=true;record.ownProject=null;record.application=null;record.milestones=[];record.draftChallenges=[];record.enterpriseChallengeDrafts=[];record.disputes=[];
+ record.announcements=[{id:'h1-final',title:'首季城市黑客松成绩已定格，奖励已发放',body:'本季积分与奖励已核定并发放完毕，项目、作品与公开成果持续保留。',target:'全体用户',status:'published',date:'2026-04-24',read:false}];
+ record.logs=[{id:'h1-freeze',action:'赛季定格',detail:'本季积分及奖励金额完成核定。',date:'2026-04-24'}];
+ return record;
 }
 
 
@@ -220,9 +284,18 @@ function publicActivityScenario(record,code,adopt){
  }
  return mockPublicNotices(record);
 }
+/* PRD 5.0：不得用「报名中」代替赛季状态。状态标签只显示赛季状态，
+   报名状态由 registrationDisplayLabel 作为独立标签并列展示。 */
 function activityDisplayStatus(record=state){
- if(record.phase==='upcoming'&&!record.season.draft&&record.season.approved)return {notOpen:'即将开始',open:'报名中',closed:'即将开始'}[record.registration]||'即将开始';
  return seasonStatus(record);
+}
+/* 并列显示的报名状态标签（SDP-001）：即将开始阶段恒显示（未开放／报名中／已截止）；
+   报名窗口落在进行中时也显示「报名中」；其余阶段、暂停与取消不显示。 */
+function registrationDisplayLabel(record=state){
+ if(record.season.draft||!record.season.approved||['cancelled','suspended'].includes(record.phase))return '';
+ if(record.registration==='open'&&['upcoming','active','workClosed'].includes(record.phase))return '报名中';
+ if(record.phase==='upcoming')return record.registration==='notOpen'?'报名未开放':'报名已截止';
+ return '';
 }
 function activityRegistrationStatus(record=state){
  if(record.phase==='cancelled')return '活动已取消';
@@ -230,10 +303,8 @@ function activityRegistrationStatus(record=state){
  return {notOpen:'报名未开放',open:'报名中',closed:'报名已截止'}[record.registration]||'报名未开放';
 }
 
-function seasonRuleSnapshot(){const s=state.season;return {challengeLimit:s.challengeLimit||3,projectLimit:s.projectLimit||1,teamLimit:s.teamLimit||3,cap:s.cap,ratio:s.ratio,threshold:s.threshold,budget:s.budget,pool:s.pool,dates:s.dates.join(' / '),optionalRules:(s.optionalRules||[]).join('；')};}
-function recordSeasonRuleChange(before){const after=seasonRuleSnapshot();const labels={challengeLimit:'项目命题上限',projectLimit:'每人项目数',teamLimit:'核心团队人数',cap:'单次评分上限',ratio:'兑换比例',threshold:'大额复核阈值',budget:'奖励预算',pool:'积分池总量',dates:'赛程',optionalRules:'补充规则'};const changes=Object.keys(labels).filter(key=>String(before[key])!==String(after[key])).map(key=>({label:labels[key],before:String(before[key]??'—'),after:String(after[key]??'—')}));if(!changes.length)return;const history=state.season.ruleVersions||[];state.season.ruleVersions=[...history,{version:(history.at(-1)?.version||1)+1,date:new Date().toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'}),changes}];}
-
-function guestRegistrationForRecord(record){const previous=state;state=record;try{return guestRegistrationLabel();}finally{state=previous;}}
+function seasonRuleSnapshot(){const s=state.season;return {scoring:s.scoringEnabled===false?'不计分':'计分',challengeLimit:s.challengeLimit||3,projectLimit:s.projectLimit||1,teamLimit:s.teamLimit||3,cap:s.cap,ratio:s.ratio,threshold:s.threshold,budget:s.budget,pool:s.pool,dates:s.dates.join(' / '),optionalRules:(s.optionalRules||[]).join('；')};}
+function recordSeasonRuleChange(before){const after=seasonRuleSnapshot();const labels={scoring:'计分方式',challengeLimit:'项目命题上限',projectLimit:'每人项目数',teamLimit:'核心团队人数',cap:'单次评分上限',ratio:'兑换比例',threshold:'大额复核阈值',budget:'奖励预算',pool:'积分池总量',dates:'赛程',optionalRules:'补充规则'};const changes=Object.keys(labels).filter(key=>String(before[key])!==String(after[key])).map(key=>({label:labels[key],before:String(before[key]??'—'),after:String(after[key]??'—')}));if(!changes.length)return;const history=state.season.ruleVersions||[];state.season.ruleVersions=[...history,{version:(history.at(-1)?.version||1)+1,date:new Date().toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'}),changes}];}
 
 let guestHeroTouch;
 document.addEventListener('touchstart',event=>{if(event.target.closest?.('.hero')&&event.touches.length===1)guestHeroTouch={x:event.touches[0].clientX,y:event.touches[0].clientY};},{passive:true});

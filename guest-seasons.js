@@ -20,6 +20,37 @@ function guestCountdown(){
  return targets.map(item=>{const end=item.date?new Date(item.date+'T23:59:59+08:00').getTime():NaN;const remaining=end-Date.now();const amount=Number.isFinite(remaining)&&remaining>0?Math.floor(remaining/86400000)+' 天 '+Math.floor(remaining%86400000/3600000)+' 小时':null;return `<div class="guest-phase-target"><strong>${stopped?'原计划日期':item.label}</strong><span>${esc(item.date||'待公布')}</span>${item.count&&!stopped&&amount?`<b>${amount}</b>`:''}</div>`;}).join('');
 }
 function guestRoute(route,label,kind=''){return button(label,'enter-public-activity:'+state.season.code+':'+route,kind);}
+/* 主按钮按「身份 × 阶段」变化（9.9 B4）。时间判断沿用 seasonTimelineNow 的推演时点，不读真实时钟：
+   评委＝授权（即将开始）→评委台+余额（进行中）→评分已截止（过评分截止）→评分记录（结算起）；
+   主办方＝等待平台批准（待批准）→待审核数（报名中）→后台；企业＝已定格起看命题报告；
+   参赛者按报名状态细分：未通过→查看原因、已撤回→重新报名、候补过组队截止→候补已结束。 */
+function guestHeroRoleAction(phase){
+ const enter=route=>'enter-public-activity:'+state.season.code+':'+route;
+ const deadline=i=>state.season.dates[i]?new Date(state.season.dates[i]+'T23:59:59+08:00').getTime():NaN;
+ if(state.role==='admin')return {label:'查看赛季治理',action:enter('admin')};
+ if(state.role==='organizer'){
+  if(!state.season.approved&&!state.season.draft)return {label:'等待平台批准',disabled:true};
+  if(registrationDisplayLabel()==='报名中')return {label:'主办方后台 · 待审核 '+state.applications.filter(a=>a.status==='审核中').length,action:enter('applications')};
+  return {label:'进入主办方后台',action:enter('organizer')};
+ }
+ if(state.role==='judge'){
+  if(phase==='upcoming')return {label:'查看我的评委授权',action:enter('judge')};
+  if(['active','workClosed'].includes(phase))return seasonTimelineNow()>deadline(6)?{label:'评分已截止',disabled:true}:{label:'去评委台（余额 '+((judge()?.allocated||0)-judgeUsed(actor))+'）',action:enter('judge')};
+  if(['settling','ended','archived'].includes(phase))return {label:'我的评分记录',action:enter('my-scores')};
+  return {label:'进入评委台',action:enter('judge')};
+ }
+ if(state.role==='enterprise')return ['ended','archived'].includes(phase)?{label:'命题报告',action:enter('report')}:{label:'查看本企业命题',action:enter('enterprise')};
+ const a=seasonPersonalApplication();
+ if(a){
+  if(a.status==='已通过')return {label:state.ownProject?'进入项目':'进入我的赛季',action:enter(state.ownProject?'project':'workspace')};
+  if(a.status==='候补')return seasonTimelineNow()>deadline(3)?{label:'候补已结束',disabled:true}:{label:'查看候补状态',action:enter('workspace')};
+  if(a.status==='未通过')return {label:'查看原因',action:enter('workspace')};
+  if(a.status==='已撤回')return {label:'重新报名',action:enter('apply'),disabled:!guestCanRegister()};
+  return {label:'查看报名状态',action:enter('workspace')};
+ }
+ if(guestCanRegister())return {label:'立即报名',action:enter('apply')};
+ return null;
+}
 function guestHero(){
  const phase=state.phase;let label,action,disabled=false;
  if(phase==='cancelled'){label='赛季已取消';disabled=true;}
@@ -29,13 +60,10 @@ function guestHero(){
  else if(guestCanRegister()){label='立即报名';action='guest-register:'+state.season.code;}
  else if(phase==='upcoming'){label=state.registration==='notOpen'?'报名 '+guestFormatDay(state.season.dates[0])+' 开放':'报名已截止';disabled=true;}
  else{label='浏览项目与作品';action='guest-scroll:guest-live';}
- // Public content is shared; only the primary entry depends on the signed-in role.
+ // Public content is shared; only the primary entry depends on the signed-in role × phase (9.9 B4).
  if(state.role!=='visitor'){
-  const home={organizer:['进入主办方后台','organizer'],admin:['查看赛季治理','admin'],judge:['进入评委台','judge'],enterprise:['查看本企业命题','enterprise']}[state.role];
-  const application=seasonPersonalApplication();
-  if(home){[label,action]=home;action='enter-public-activity:'+state.season.code+':'+action;disabled=false;}
-  else if(application){label=application.status==='候补'?'查看候补状态':application.status==='已通过'?(state.ownProject?'进入项目':'进入我的赛季'):'查看报名状态';action='enter-public-activity:'+state.season.code+':'+(application.status==='已通过'&&state.ownProject?'project':'workspace');disabled=false;}
-  else if(guestCanRegister())action='enter-public-activity:'+state.season.code+':apply';
+  const override=guestHeroRoleAction(phase);
+  if(override){label=override.label;action=override.action||'';disabled=!!override.disabled;}
  }
  const base='assets/season-details/';const closed=disabled;const actionMarkup=phase==='cancelled'?`<div class="guest-cancelled-label">赛季已取消</div>`:`<button class="season-state-ticket ${closed?'disabled':'open'} guest-state-ticket" ${closed?'disabled':`data-action="${esc(action)}"`}><img class="season-ticket-outline" src="${base+(closed?'ticket-disabled.svg':'ticket-open.svg')}" alt=""><span>${esc(label)}</span>${closed?'':`<img class="season-ticket-arrow" src="${base}ticket-arrow.svg" alt="">`}</button>`;
  const summaryCount=guestEventMetrics().projects;
@@ -93,7 +121,21 @@ function guestPhaseContent(){
 
 function guestSeasonBody(){if(state.role==='participant'&&(state.application||state.ownProject))return participantSeasonBody();return `${guestHero()}${state.role==='participant'?seasonApplicationPanel():''}${guestPhaseContent()}`;}
 
-function guestSeasonPage(code){const record=publicActivityRecord(code);if(!record||!record.season.approved||record.season.draft)return layout(`<div class="container">${empty('这个赛季尚未公开','',button('返回火热赛季','#seasons','primary'))}</div>`);return withPublicActivity(code,()=>layout(`<div class="container guest-season-detail">${seasonBackLink()}${guestSeasonBody()}</div>`));}
+/* SDP-001：草稿与待批准赛季只对主办方组织与平台管理员可见；
+   管理者预览复用同一套公开页面，顶部加「·未公开」横幅与批准/驳回（9.9）。 */
+function seasonPreviewBanner(record,current,code){
+ const status=seasonStatus(record);
+ // 管理员在待批准赛季的预览页顶部始终可以直接批准/驳回（9.9），不限于当前选中赛季。
+ const actions=state.role==='admin'?(status==='待平台批准'?button('批准发布','approve-season:'+code,'primary')+button('驳回','reject-season:'+code):(current?button('赛季治理','#admin','sm'):'')):(current?button('赛季配置','#season-config','sm'):'');
+ return `<section class="panel guest-preview-banner" role="status"><div><h2>${esc(status)} · 未公开</h2><p>${esc(status==='草稿'?'仅主办方组织与平台管理员可见；完善配置并满足 9 项发布门槛后可提交审核。':'仅主办方组织与平台管理员可见；平台管理员批准后才公开、才能开赛。')}</p></div><div class="row">${actions}</div></section>`;
+}
+function guestSeasonPage(code){
+ const record=publicActivityRecord(code);
+ const unpublished=record&&(!record.season.approved||record.season.draft);
+ if(!record||unpublished&&!isManager())return layout(`<div class="container">${empty('这个赛季尚未公开','',button('返回火热赛季','#seasons','primary'))}</div>`);
+ const banner=unpublished?seasonPreviewBanner(record,code===state.season.code,code):'';
+ return withPublicActivity(code,()=>layout(`<div class="container guest-season-detail">${seasonBackLink()}${banner}${guestSeasonBody()}</div>`));
+}
 function guestFinalResultsPage(){if(!state.season.approved||state.season.draft)return layout(`<div class="container">${empty('这个赛季尚未公开')}</div>`);return layout(`<div class="container"><a class="link" href="#season?code=${esc(state.season.code)}">← 赛季详情</a>${challengeHeading('赛后结果')}<p>${esc(state.season.name)}</p>${guestStats()}${guestTopProjects(true,true)}${guestOutcomesSection(true)}${guestFinalSummary()}</div>`);}
 
 function guestApplyGate(){const code=new URLSearchParams(location.hash.split('?')[1]||'').get('code')||state.season.code;const record=publicActivityRecord(code);if(!record||!record.season.approved||record.season.draft)return layout(`<div class="container">${empty('这个赛季尚未公开')}</div>`);return withPublicActivity(code,()=>layout(`<div class="container">${empty(guestCanRegister()?'登录后报名':guestRegistrationLabel(),'',guestCanRegister()?button('登录并报名','guest-register:'+code,'primary'):button('查看赛季详情','#season?code='+code))}</div>`));}
@@ -106,9 +148,10 @@ function guestRuleHistory(){const history=state.season.ruleVersions||[];return `
 function guestHomeContent(code){return withPublicActivity(code,()=>`<section class="guest-home-context"><div class="section-heading"><h2>${esc(state.season.name)}</h2>${button('赛季详情','#season?code='+code)}</div>${guestPhaseContent()}</section>`);}
 
 function guestCancelledAfterStart(){const from=state.cancelledFromPhase;if(from)return from==='suspended'?(state.previousPhase||'active')!=='upcoming':from!=='upcoming';return guestPublishedWorks().length>0||effective().length>0;}
-function guestRecordCatalog(){const codes=[...new Set(['S01','W01','H02','A01','P00',state.season.code,...Object.keys(state.organizerSeasonRecords||{})])];return codes.map(code=>({code,record:publicActivityRecord(code)})).filter(item=>item.record&&item.record.season.approved&&!item.record.season.draft&&item.record.phase!=='draft');}
+/* DEMO-* 赛季只是主办方后台的状态样例（内容复制自 S01），不进入访客可见的往季档案、命题库与筛选。 */
+function guestRecordCatalog(){const codes=[...new Set(['S01','S02','W01','H01','H02','A01','P00',state.season.code,...Object.keys(state.organizerSeasonRecords||{})])];return codes.map(code=>({code,record:publicActivityRecord(code)})).filter(item=>item.record&&!item.record.isDemoSeason&&item.record.season.approved&&!item.record.season.draft&&item.record.phase!=='draft');}
 function guestArchiveRecords(){return guestRecordCatalog().filter(item=>['ended','archived'].includes(item.record.phase));}
-function guestArchivePage(){const records=guestArchiveRecords(),q=new URLSearchParams(location.hash.split('?')[1]||'');const items=records.filter(({record})=>(!q.get('type')||(record.season.type||'season')===q.get('type'))&&(!q.get('organizer')||record.season.organizer===q.get('organizer'))&&(!q.get('year')||record.season.dates[2]?.slice(0,4)===q.get('year')));const organizers=[...new Set(records.map(item=>item.record.season.organizer))];const years=[...new Set(records.map(item=>item.record.season.dates[2]?.slice(0,4)).filter(Boolean))].sort().reverse();return layout(`<div class="container">${challengeHeading('往季档案')}<form data-form="guest-archive-filter" class="guest-library-filters">${selectField('类型','type',[['','全部类型'],['season','常规赛季'],['hackathon','黑客松']],q.get('type')||'')}${selectField('主办方组织','organizer',[['','全部主办方'],...organizers.map(value=>[value,value])],q.get('organizer')||'')}${selectField('年份','year',[['','全部年份'],...years.map(value=>[value,value])],q.get('year')||'')}<button class="btn primary" type="submit">筛选</button></form>${items.length?`<div class="grid cols-3">${items.map(({code,record})=>panel(record.season.name,record.season.organizer,`${badge(seasonStatus(record))}<p>${esc(record.season.theme)}</p><p>${esc(record.season.dates[2]||'待公布')} — ${esc(record.season.dates[6]||'待公布')}</p>${button('查看赛后结果','enter-public-activity:'+code+':rankings','sm')}`)).join('')}</div>`:empty('没有符合条件的赛季')}</div>`);}
+function guestArchivePage(){const records=guestArchiveRecords(),q=new URLSearchParams(location.hash.split('?')[1]||'');const items=records.filter(({record})=>(!q.get('type')||(record.season.type||'season')===q.get('type'))&&(!q.get('organizer')||seasonOrganizerOrgs(record).includes(q.get('organizer')))&&(!q.get('year')||record.season.dates[2]?.slice(0,4)===q.get('year')));const organizers=[...new Set(records.flatMap(item=>seasonOrganizerOrgs(item.record)))];const years=[...new Set(records.map(item=>item.record.season.dates[2]?.slice(0,4)).filter(Boolean))].sort().reverse();return layout(`<div class="container">${challengeHeading('往季档案')}<form data-form="guest-archive-filter" class="guest-library-filters">${selectField('类型','type',[['','全部类型'],['season','常规赛季'],['hackathon','黑客松']],q.get('type')||'')}${selectField('主办方组织','organizer',[['','全部主办方'],...organizers.map(value=>[value,value])],q.get('organizer')||'')}${selectField('年份','year',[['','全部年份'],...years.map(value=>[value,value])],q.get('year')||'')}<button class="btn primary" type="submit">筛选</button></form>${items.length?`<div class="grid cols-3">${items.map(({code,record})=>panel(record.season.name,seasonOrganizerLabel(record),`${badge(seasonStatus(record))}<p>${esc(record.season.theme)}</p><p>${esc(record.season.dates[2]||'待公布')} — ${esc(record.season.dates[6]||'待公布')}</p>${button('查看赛后结果','enter-public-activity:'+code+':rankings','sm')}`)).join('')}</div>`:empty('没有符合条件的赛季')}</div>`);}
 function guestChallengeLibrary(){const q=new URLSearchParams(location.hash.split('?')[1]||'');const all=guestRecordCatalog().flatMap(({code,record})=>withPublicActivity(code,()=>publicChallenges().map(challenge=>({...challenge,activityCode:code,activityName:record.season.name}))));const items=all.filter(c=>(!q.get('type')||c.type===q.get('type'))&&(!q.get('status')||c.status===q.get('status'))&&(!q.get('company')||c.company===q.get('company'))&&(!q.get('season')||c.activityCode===q.get('season')));const options=key=>[...new Set(all.map(c=>c[key]))].filter(Boolean).map(value=>[value,value]);const seasons=[...new Map(all.map(c=>[c.activityCode,[c.activityCode,c.activityName]])).values()];return layout(`<div class="container">${seasonBackLink()}${challengeHeading('命题库')}<form data-form="guest-library-filter" class="guest-library-filters">${selectField('命题类型','type',[['','全部类型'],...options('type')],q.get('type')||'')}${selectField('状态','status',[['','全部状态'],...options('status')],q.get('status')||'')}${selectField('企业','company',[['','全部企业'],...options('company')],q.get('company')||'')}${selectField('赛季','season',[['','全部赛季'],...seasons],q.get('season')||'')}</form>${items.length?`<div class="grid cols-3">${items.map(c=>guestChallengeCard(c)).join('')}</div>`:empty('没有符合条件的命题')}</div>`);}
 function guestHeaderAnnouncementRecord(){if(currentRoute==='seasons')return selectedFeaturedEvent().record;const code=new URLSearchParams(location.hash.split('?')[1]||'').get('code')||state.season.code;return publicActivityRecord(code)||state;}
 
